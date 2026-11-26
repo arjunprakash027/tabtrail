@@ -269,6 +269,8 @@ sequenceDiagram
     T-->>A: existing topic, or new
 ```
 
+Give your agent [`skills/tabtrail/SKILL.md`](skills/tabtrail/SKILL.md). It has the commands, the fields, the errors and the privacy rules. You can install it as a skill: `npx skills add arjunprakash027/tabtrail`.
+
 > [!WARNING]
 > If your agent uses a cloud model, the output that it reads goes to that model provider. `topic` output includes titles, chat text, URLs and file paths.
 
