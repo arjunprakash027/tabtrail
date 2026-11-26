@@ -47,14 +47,14 @@ This output comes from the [demo data](examples/demo_history.py): 320 invented v
 
 ```console
 $ tabtrail interests
-   1. topic 6    score   2.56   79% recent  rising  brave            lifetimes ownership traits async
-   2. topic 4    score   1.98   51% recent  rising  brave            atmosphere europa exoplanet ocean
-   3. topic 1    score   1.61   19% recent  steady  brave            bike tyre gravel routes
-   4. topic 5    score   1.44   46% recent  steady  brave            black hole imaging james
-   5. topic 7    score   1.22   37% recent  steady  brave            starter feeding sourdough explained
-   6. topic 0    score   1.12    1% recent  fading  brave            cycling cadence base training
-   7. topic 2    score   1.04   10% recent  fading  brave            loaf scoring dutch oven
-   8. topic 3    score    1.0   29% recent  steady  brave            bread hydration rye explained
+   1. topic 6    score  0.952  trend  2.58 rising  brave            lifetimes ownership traits async
+   2. topic 4    score  0.496  trend   2.0 rising  brave            atmosphere europa exoplanet ocean
+   3. topic 5    score  0.304  trend  1.77 rising  brave            black hole imaging james
+   4. topic 7    score   0.29  trend  1.89 rising  brave            starter feeding sourdough explained
+   5. topic 3    score  0.184  trend  1.74 rising  brave            bread hydration rye explained
+   6. topic 1    score  0.169  trend  0.92 steady  brave            bike tyre gravel routes
+   7. topic 2    score  0.099  trend  0.84 steady  brave            loaf scoring dutch oven
+   8. topic 0    score  0.045  trend  0.38 fading  brave            cycling cadence base training
 ```
 
 The labels are the top words of each topic. They are not sentences. One subject can also become more than one topic. In the demo, bread is topics 2, 3 and 7.
@@ -152,18 +152,22 @@ tabtrail removes noise before it counts:
 
 ### Score and trend
 
+Attention loses half its value every 7 days. Age counts from now.
+
 ```text
-score        = hours of attention  +  events / 120
-recent share = attention in the last 14 days  /  all attention
+score       = Σ hours of attention × 0.5^(age in days ÷ 7)
+trend ratio = short average (7-day half-life) ÷ long average (60-day half-life)
 ```
 
-| Recent share | Trend |
-|---|---|
-| 50% or more | rising |
-| 15% to 49% | steady |
-| less than 15% | fading |
+Example: 1 h today, 2 h 14 days ago and 4 h 60 days ago give 1 + 0.5 + 0.01 = **1.51**.
 
-The 14 days end at your newest event. See [How scores are calculated](docs/scores.md).
+| Trend ratio | Trend |
+|---|---|
+| 1.25 or more | rising |
+| more than 0.8, less than 1.25 | steady |
+| 0.8 or less | fading |
+
+See [How scores are calculated](docs/scores.md).
 
 ### How new text finds a topic
 
@@ -202,14 +206,14 @@ To get JSON, put `--json` **before** the command: `tabtrail --json interests`. A
 {
  "topic_id": 0,
  "words": "cycling cadence base training",
- "score": 1.12,
- "last_14_days_pct": 1.0,
+ "score": 0.045,
+ "trend_ratio": 0.38,
  "trend": "fading",
  "items": 20,
  "events": 20,
  "attention_h": 0.95,
  "sources": "brave",
- "rank": "6 of 8",
+ "rank": "8 of 8",
  "top_items": [
   {
    "text": "Common mistakes with cycling base training",
@@ -267,7 +271,6 @@ Set these environment variables.
 | `TABTRAIL_OLLAMA` | `http://localhost:11434` | Ollama address |
 | `TABTRAIL_EMBED_MODEL` | `nomic-embed-text` | Embedding model |
 | `TABTRAIL_MIN_SECONDS` | `10` | Minimum time for a page to count |
-| `TABTRAIL_RECENT_DAYS` | `14` | Length of the recent window |
 | `TABTRAIL_STALE_HOURS` | `24` | Age at which `last-run` asks for a new run |
 
 ## Privacy
@@ -287,7 +290,7 @@ If you set `TABTRAIL_OLLAMA` to a remote address, tabtrail sends text to that ma
 ## Limits
 
 - The 30 and 120 second values are estimates.
-- The score adds hours to an event count. Searches and chat messages thus get weight two times.
+- The 7-day and 60-day half-lives and the 1.25 and 0.8 cutoffs are first choices.
 - Topics need at least 50 items. A small history can give no topics.
 - Topic labels are top words. Some labels are weak.
 - `match` assumes that each topic is round around its centre.

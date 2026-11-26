@@ -130,20 +130,23 @@ Weakness: idf is counted inside the topic only. A word that is common everywhere
 | Search | 30, fixed |
 | Chat message | 120, fixed |
 
-**Per item:** attention = sum over its events. recent = the same sum for events less than 14 days older than the newest event. events = count.
+**Per item:** age = days from the event to now.
+
+  score_h = Σ attention_h × 0.5^(age / 7)
+  long_h = Σ attention_h × 0.5^(age / 60)
 
 **Per topic:**
 
-  attention_h = Σ attention / 3,600
-  score = attention_h + events / 120
-  recent_share = Σ recent / Σ attention
+  score = Σ score_h
+  trend_ratio = (score / window(7)) / (long / window(60))
+  window(h) = h / ln 2 × (1 − 0.5^(span / h))
 
-Topic 6: attention_h = 2.23, events = 40.
-score = 2.23 + 40 / 120 = 2.23 + 0.33 = **2.56**. recent_share = 0.79.
+span = days from the oldest event in the data to now. With steady attention, trend_ratio = 1.
 
-**Trend:** recent_share ≥ 0.50 is rising, ≥ 0.15 is steady, less is fading. Topic 6 is rising.
+Example: 1 h today, 2 h 14 days ago, 4 h 60 days ago.
+score = 1 × 1 + 2 × 0.25 + 4 × 0.003 = **1.51**. The 60-day-old hours count for almost nothing.
 
-The `events / 120` part gives each event 30 s more. A search or a chat message then counts twice. This part is planned for removal.
+**Trend:** trend_ratio ≥ 1.25 is rising, ≤ 0.8 is fading, the rest is steady.
 
 ## 7. Matching new text
 
@@ -166,8 +169,6 @@ This rule uses the 768 numbers, not the 10 from UMAP. A new point cannot go thro
 ## 8. Known weak points
 
 1. 30 s for a search and 120 s for a chat message are fixed guesses.
-2. `events / 120` counts searches and chat messages twice.
 3. Topic words use idf inside one topic, not across all topics.
-4. The 14-day window ends at the newest event, not at today.
 5. Matching assumes round topics.
 6. UMAP and HDBSCAN use a fixed seed. Another seed gives slightly different topics.

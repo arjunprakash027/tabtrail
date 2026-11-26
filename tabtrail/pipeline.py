@@ -22,7 +22,8 @@ BRAND_ONLY = re.compile(r"^(youtube( music)?|linkedin|claude|chatgpt|google( gem
 SEARCH_S, CHAT_S = 30.0, 120.0   # attention seconds for a search and a typed message (first guess)
 MAX_PAGE_S = 1800.0              # one visit counts at most 30 min: music or a tab left in front is not 3 hours of attention
 LONG_WORDS, LINE_WORDS = 25, 30   # a chat message with more words than LONG_WORDS becomes one line
-RISING, STEADY = 0.5, 0.15        # recent_share at or above: rising, steady; below STEADY: fading
+HALF_LIFE_D, LONG_HALF_LIFE_D = 7, 60   # attention counts half after this many days (score, and the long average for trend)
+RISING, FADING = 1.25, 0.8        # trend ratio at or above RISING: rising; at or below FADING: fading
 MIN_ITEMS = 50                    # fewer items: no clustering, so no topics
 ACK = re.compile(r"^(yes|yep|ya|ok|okay|no|done|continue|go|go on|try again|try now|thanks|thank you|nice|cool|great|perfect|sure|lets go|let's go)\b.{0,20}$", re.I)
 
@@ -53,7 +54,7 @@ def events(ingest: dict, cfg: Config, con: duckdb.DuckDBPyConnection) -> pd.Data
 
 # ---------- 3 · normalize: one short line per event ----------
 def _first_words(t: str) -> str: return " ".join(t.split()[:LINE_WORDS])
-def _trend(r: float) -> str: return "rising" if r >= RISING else ("steady" if r >= STEADY else "fading")
+def _trend(r: float) -> str: return "rising" if r >= RISING else ("fading" if r <= FADING else "steady")
 
 def _long(events: pd.DataFrame) -> pd.Series:
     return (events.kind == "chat") & (events.text.str.split().str.len() > LONG_WORDS)
@@ -96,11 +97,20 @@ def normalized(events: pd.DataFrame, cfg: Config, con: duckdb.DuckDBPyConnection
     return out
 
 # ---------- 4 · items: same line from many events becomes one item ----------
-def items(normalized: pd.DataFrame, cfg: Config) -> pd.DataFrame:
-    now = normalized.ts.max()
-    g = normalized.assign(recent=np.where(now - normalized.ts < cfg.recent_days * 86400, normalized.attention_s, 0.0)).groupby("line")
-    return pd.DataFrame({"events": g.size(), "attention_s": g.attention_s.sum(), "recent_s": g.recent.sum(),
-                         "last_ts": g.ts.max(), "sources": g.source.agg(lambda s: ",".join(sorted(set(s)))),
+def _decayed_h(attention_s: pd.Series, ts: pd.Series, half_life_d: float) -> pd.Series:
+    """Hours of attention, halved for each half_life_d days of age (age from now)."""
+    age_d = ((time.time() - ts) / 86400).clip(lower=0)
+    return attention_s * 0.5 ** (age_d / half_life_d) / 3600
+
+def _window_d(span_d: float, half_life_d: float) -> float:
+    """Total weight of one day of attention per day across span_d days, so steady attention gives a trend ratio of 1."""
+    return half_life_d / np.log(2) * (1 - 0.5 ** (span_d / half_life_d))
+
+def items(normalized: pd.DataFrame) -> pd.DataFrame:
+    g = normalized.assign(score_h=_decayed_h(normalized.attention_s, normalized.ts, HALF_LIFE_D),
+                          long_h=_decayed_h(normalized.attention_s, normalized.ts, LONG_HALF_LIFE_D)).groupby("line")
+    return pd.DataFrame({"events": g.size(), "attention_s": g.attention_s.sum(), "score_h": g.score_h.sum(), "long_h": g.long_h.sum(),
+                         "first_ts": g.ts.min(), "last_ts": g.ts.max(), "sources": g.source.agg(lambda s: ",".join(sorted(set(s)))),
                          "kind": g.kind.first()}).reset_index().rename(columns={"line": "text"})
 
 # ---------- 5 · embed (cached by text) ----------
@@ -126,12 +136,13 @@ def clusters(embeddings: np.ndarray) -> np.ndarray:
     return HDBSCAN(min_cluster_size=15, min_samples=5, copy=True).fit_predict(Z)
 
 # ---------- 7 · topics: totals, top words, score, trend ----------
-TOPIC_COLS = ["topic_id", "words", "items", "events", "attention_h", "recent_share", "score", "sources", "examples"]
+TOPIC_COLS = ["topic_id", "words", "items", "events", "attention_h", "trend_ratio", "score", "sources", "examples"]
 RUN_TABLES = ("topics", "topic_centroids", "topic_items")
 
 def topics(items: pd.DataFrame, clusters: np.ndarray, embeddings: np.ndarray, con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     from sklearn.feature_extraction.text import TfidfVectorizer
     df = items.assign(topic=clusters)
+    span_d = (time.time() - items.first_ts.min()) / 86400 if len(items) else 0.0   # days of history in the data
     rows = []
     for k, g in df[df.topic >= 0].groupby("topic"):
         try:
@@ -139,10 +150,12 @@ def topics(items: pd.DataFrame, clusters: np.ndarray, embeddings: np.ndarray, co
             sc = np.asarray(tf.transform(g.text).sum(axis=0)).ravel()
             words = " ".join(w for w, _ in sorted(zip(tf.get_feature_names_out(), sc), key=lambda x: -x[1])[:4])
         except ValueError: words = ""
-        att = g.attention_s.sum()
+        score, long = g.score_h.sum(), g.long_h.sum()
         rows.append({"topic_id": int(k), "words": words, "items": len(g), "events": int(g.events.sum()),
-                     "attention_h": round(att / 3600, 2), "recent_share": round(g.recent_s.sum() / att, 2) if att else 0.0,
-                     "score": round(att / 3600 + g.events.sum() / 120, 2),
+                     "attention_h": round(g.attention_s.sum() / 3600, 2),
+                     # short average ÷ long average, each in hours per day over the history that exists
+                     "trend_ratio": round((score / _window_d(span_d, HALF_LIFE_D)) / (long / _window_d(span_d, LONG_HALF_LIFE_D)), 2) if long else 0.0,
+                     "score": round(score, 3),
                      "sources": ",".join(sorted(set(",".join(g.sources).split(",")))),
                      "examples": " | ".join(g.sort_values("attention_s", ascending=False).text.head(5))})
     t = pd.DataFrame(rows, columns=TOPIC_COLS).sort_values("score", ascending=False).reset_index(drop=True)
@@ -156,7 +169,7 @@ def topics(items: pd.DataFrame, clusters: np.ndarray, embeddings: np.ndarray, co
     try:
         run_id = con.execute("select nextval('run_seq')").fetchall()[0][0]
         con.register("t", t.assign(run_id=run_id))
-        con.execute(f"INSERT INTO topics SELECT run_id, {', '.join(TOPIC_COLS)} FROM t")
+        con.execute(f"INSERT INTO topics BY NAME SELECT run_id, {', '.join(TOPIC_COLS)} FROM t")
         con.unregister("t")
         con.executemany("INSERT INTO topic_centroids VALUES (?,?,?,?,?)", [(run_id, *c) for c in cents])
         con.register("ti", df[["text", "topic"]].assign(run_id=run_id))
@@ -173,9 +186,9 @@ def topics(items: pd.DataFrame, clusters: np.ndarray, embeddings: np.ndarray, co
 def profile_md(topics: pd.DataFrame, items: pd.DataFrame, clusters: np.ndarray, cfg: Config) -> str:
     if topics.empty: return str(cfg.profile_md)   # no topics: keep the last profile.md
     lines = [f"# profile.md ({time.strftime('%d %b %Y')})", "", "Made by tabtrail from your local history. Nothing left this machine.", "",
-             "## Topics by attention", "", "| # | Topic (top words) | Score | Last 14 days | Trend | Sources |", "|---|---|---|---|---|---|"]
+             "## Topics by attention", "", "| # | Topic (top words) | Score | Trend ratio | Trend | Sources |", "|---|---|---|---|---|---|"]
     for i, r in topics.head(25).iterrows():
-        lines.append(f"| {i+1} | {r.words} | {r.score} | {int(r.recent_share*100)}% | {_trend(r.recent_share)} | {r.sources} |")
+        lines.append(f"| {i+1} | {r.words} | {r.score} | {r.trend_ratio} | {_trend(r.trend_ratio)} | {r.sources} |")
     lines += ["", f"Items with a topic: {int((clusters >= 0).sum())} of {len(items)}. Without a topic: {int((clusters < 0).sum())}."]
     text = "\n".join(lines) + "\n"
     cfg.profile_md.write_text(text)

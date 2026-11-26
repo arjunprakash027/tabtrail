@@ -57,6 +57,6 @@ def main(argv=None):
         except query.Busy as e: out = {"error": str(e)}
     if a.json or a.cmd != "interests": print(json.dumps(out, indent=1, default=str))
     else:
-        for r in out: print(f"{r['rank']:>4}. topic {r['topic_id']:<4} score {r['score']:>6}  {int(r['last_14_days_pct']):>3}% recent  {r['trend']:<7} {r['sources']:<16} {r['words']}")
+        for r in out: print(f"{r['rank']:>4}. topic {r['topic_id']:<4} score {r['score']:>6}  trend {r['trend_ratio']:>5} {r['trend']:<7} {r['sources']:<16} {r['words']}")
 
 if __name__ == "__main__": main()

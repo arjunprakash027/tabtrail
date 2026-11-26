@@ -4,7 +4,7 @@ import numpy as np
 from . import db, pipeline
 
 STALE_HOURS = float(os.environ.get("TABTRAIL_STALE_HOURS", "24"))
-TREND = f"CASE WHEN recent_share >= {pipeline.RISING} THEN 'rising' WHEN recent_share >= {pipeline.STEADY} THEN 'steady' ELSE 'fading' END"
+TREND = f"CASE WHEN trend_ratio >= {pipeline.RISING} THEN 'rising' WHEN trend_ratio <= {pipeline.FADING} THEN 'fading' ELSE 'steady' END"
 
 class Busy(Exception): pass
 
@@ -47,21 +47,20 @@ def last_run(cfg):
             "should_run": bool(stale or new_data), "run_with": "tabtrail run"}
 
 def interests(cfg, mode="top", source=None, limit=10):
-    """mode: top (by score) | recent (active in the last 14 days) | rising | fading."""
+    """mode: top (all, by score) | recent (not fading) | rising | fading. Always sorted by score."""
     con = _con(cfg); run = _latest(con)
     where = {"top": "true", "recent": "trend <> 'fading'", "rising": "trend = 'rising'", "fading": "trend = 'fading'"}[mode]
-    order = "recent_share * score desc" if mode in ("recent", "rising") else "score desc"
-    q = f"""select topic_id, words, score, round(recent_share*100) as last_14_days_pct, {TREND} as trend, items, events,
+    q = f"""select topic_id, words, score, trend_ratio, {TREND} as trend, items, events,
                    attention_h, sources, rank() over (order by score desc) as rank
             from topics where run_id = ? """
-    rows = con.execute(f"select * from ({q}) where {where} {'and sources like ?' if source else ''} order by {order.replace('recent_share', 'last_14_days_pct')} limit ?",
+    rows = con.execute(f"select * from ({q}) where {where} {'and sources like ?' if source else ''} order by score desc limit ?",
                        [run] + ([f"%{source}%"] if source else []) + [limit]).df()
     return rows.to_dict("records")
 
 def topic(cfg, topic_id, limit=15):
     """One topic: its numbers and the items in it with the most attention."""
     con = _con(cfg); run = _latest(con)
-    t = con.execute(f"select topic_id, words, score, round(recent_share*100) as last_14_days_pct, {TREND} as trend, items, events, attention_h, sources "
+    t = con.execute(f"select topic_id, words, score, trend_ratio, {TREND} as trend, items, events, attention_h, sources "
                     f"from topics where run_id=? and topic_id=?", [run, topic_id]).df()
     if t.empty: raise SystemExit(f"No topic {topic_id} in the latest run.")
     rank = con.execute("select count(*) + 1 from topics where run_id=? and score > ?", [run, float(t.score[0])]).fetchall()[0][0]
@@ -95,7 +94,7 @@ def match(cfg, kind, text, use_mlx=False):
     if len(line) < 2: raise SystemExit("--text is empty.")
     e = np.asarray(pipeline._embed(cfg, [line], timeout=60)[0], dtype=np.float32); e /= np.linalg.norm(e)
     con = _con(cfg); run = _latest(con)
-    rows = con.execute(f"""select c.topic_id, c.vec, c.sim_p10, c.sim_median, t.words, t.score, round(t.recent_share*100) as pct, {TREND} as trend, t.examples
+    rows = con.execute(f"""select c.topic_id, c.vec, c.sim_p10, c.sim_median, t.words, t.score, t.trend_ratio, {TREND} as trend, t.examples
                            from topic_centroids c join topics t using(run_id, topic_id) where c.run_id=?""", [run]).fetchall()
     if not rows: raise SystemExit("This run has no topic centroids. Run: tabtrail run")
     sims = np.array([np.asarray(r[1], dtype=np.float32) @ e for r in rows])
@@ -104,7 +103,7 @@ def match(cfg, kind, text, use_mlx=False):
     def card(i):
         r = rows[i]
         return {"topic_id": r[0], "words": r[4], "similarity": round(float(sims[i]), 3), "joins_if_at_least": round(r[2], 3),
-                "score": r[5], "rank": f"{ranks[r[0]]} of {len(rows)}", "last_14_days_pct": r[6], "trend": r[7], "examples": r[8].split(" | ")[:3]}
+                "score": r[5], "rank": f"{ranks[r[0]]} of {len(rows)}", "trend_ratio": r[6], "trend": r[7], "examples": r[8].split(" | ")[:3]}
     best = card(order[0])
     joins = best["similarity"] >= best["joins_if_at_least"]
     return {"input": {"kind": kind, "text": text[:200], "line_embedded": line},

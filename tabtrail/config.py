@@ -33,7 +33,6 @@ class Config:
     lines_per_run: int    # cap on new LLM lines per run, so a daily run stays short
     llm_model: str
     min_seconds: int
-    recent_days: int
 
     @property
     def db(self): return self.home / "tabtrail.duckdb"
@@ -57,5 +56,4 @@ def load() -> Config:
         ollama=_env("OLLAMA", "http://localhost:11434"), embed_model=_env("EMBED_MODEL", "nomic-embed-text"),
         lines=_env("LINES", "mlx"), lines_per_run=int(_env("LINES_PER_RUN", "200")),
         llm_model=_env("LLM_MODEL", "mlx-community/Qwen3-1.7B-4bit"),
-        min_seconds=int(_env("MIN_SECONDS", "10")),
-        recent_days=int(_env("RECENT_DAYS", "14")))
+        min_seconds=int(_env("MIN_SECONDS", "10")))
