@@ -1,0 +1,12 @@
+data/
+.venv/
+__pycache__/
+*.duckdb
+*.duckdb.wal
+.pytest_cache/
+.benchmarks/
+.DS_Store
+.env
+# local only: old scripts and design notes with personal data
+experiments/
+docs/design/

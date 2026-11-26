@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="tabtrail icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e2447"/><stop offset="1" stop-color="#0b0e1d"/></linearGradient>
+    <linearGradient id="trail" gradientUnits="userSpaceOnUse" x1="56" y1="196" x2="188" y2="100"><stop offset="0" stop-color="#5eead4"/><stop offset="0.55" stop-color="#a78bfa"/><stop offset="1" stop-color="#fbbf24"/></linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+  <!-- a browser tab -->
+  <path d="M34 76H52C60 76 62 71 64 64L66 56C68 49 72 46 80 46H128C136 46 140 49 142 56L144 64C146 71 148 76 156 76H222" fill="none" stroke="#dbe1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the trail that leaves it -->
+  <path d="M60 196C60 156 100 176 112 148S130 108 158 122S178 118 186 108" fill="none" stroke="url(#trail)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0.1 19"/>
+  <circle cx="60" cy="200" r="13" fill="#5eead4"/>
+  <circle cx="112" cy="148" r="11" fill="#a78bfa"/>
+  <!-- where it ends: a cluster of related items -->
+  <circle cx="192" cy="140" r="52" fill="#fbbf24" opacity="0.13"/>
+  <g stroke="#fbbf24" stroke-width="4" opacity="0.65"><path d="M192 140L192 108M192 140L222 130M192 140L212 170M192 140L164 164"/></g>
+  <g fill="#fbbf24"><circle cx="192" cy="140" r="17"/><circle cx="192" cy="106" r="9"/><circle cx="224" cy="129" r="8"/><circle cx="214" cy="172" r="10"/><circle cx="162" cy="165" r="8"/></g>
+</svg>

@@ -1,0 +1,30 @@
+[project]
+name = "tabtrail"
+version = "0.2.0"
+description = "Local pipeline that turns your browser history and AI chats into a map of your interests"
+requires-python = ">=3.11,<3.14"
+license = "MIT"
+dependencies = [
+  "apache-hamilton>=1.90",
+  "duckdb>=1.2,<3",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "scikit-learn>=1.4",
+  "umap-learn>=0.5",
+]
+
+[project.optional-dependencies]
+mlx = ["mlx-lm>=0.20"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-benchmark>=5.3.1",
+]
+
+[project.scripts]
+tabtrail = "tabtrail.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
