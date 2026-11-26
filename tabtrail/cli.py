@@ -42,6 +42,7 @@ def main(argv=None):
     sub.add_parser("last-run", help="when the pipeline last ran, and whether it should run again")
     sub.add_parser("profile", help="print profile.md")
     sub.add_parser("status", help="what is stored")
+    sub.add_parser("dashboard", help="write dashboard.html (all topics, scores and top items) and print its path")
     a = p.parse_args(argv); cfg = config.load()
     if a.cmd == "run": out = run(cfg, a.to)
     elif a.cmd == "graph":
@@ -49,11 +50,11 @@ def main(argv=None):
         out = {v.name: sorted(v.required_dependencies) for v in dr.list_available_variables() if v.name in STEPS}
     elif a.cmd == "profile": print(cfg.profile_md.read_text()); return
     else:
-        from . import query
+        from . import dashboard, query
         try:
             out = {"interests": lambda: query.interests(cfg, a.mode, a.source, a.limit), "topic": lambda: query.topic(cfg, a.topic_id, a.limit),
                    "match": lambda: query.match(cfg, a.kind, a.text, a.mlx), "last-run": lambda: query.last_run(cfg),
-                   "status": lambda: query.status(cfg)}[a.cmd]()
+                   "status": lambda: query.status(cfg), "dashboard": lambda: {"dashboard": dashboard.build(cfg)}}[a.cmd]()
         except query.Busy as e: out = {"error": str(e)}
     if a.json or a.cmd != "interests": print(json.dumps(out, indent=1, default=str))
     else:

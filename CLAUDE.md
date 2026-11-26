@@ -10,6 +10,7 @@ tabtrail turns local browser history and AI chat logs into a map of interests. A
 | `tabtrail/adapters.py` | One adapter per source: `brave`, `claude`, `pi`. |
 | `tabtrail/query.py` | Read-only questions: `interests`, `topic`, `match`, `last_run`. |
 | `tabtrail/cli.py` | The `tabtrail` command. |
+| `tabtrail/dashboard.py` | `tabtrail dashboard`: one static HTML page of the latest run, in the data folder. |
 | `tabtrail/db.py` | DuckDB schema. |
 | `tabtrail/config.py` | Settings from `TABTRAIL_*` environment variables. |
 | `tests/` | Pytest checks. Run `uv run pytest`. |

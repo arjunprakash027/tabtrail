@@ -87,6 +87,7 @@ export TABTRAIL_SOURCES=brave TABTRAIL_LINES=truncate
 uv run python examples/demo_history.py "$TABTRAIL_PROFILE"
 uv run tabtrail run
 uv run tabtrail interests
+uv run tabtrail dashboard           # then open the printed path in your browser
 ```
 
 The demo dates count back from today. Your numbers can differ a little from the numbers on this page.
@@ -103,7 +104,19 @@ export TABTRAIL_LINES=truncate      # all other machines: use the first 30 words
 ```sh
 uv run tabtrail run
 uv run tabtrail interests --mode rising
+uv run tabtrail dashboard
 ```
+
+### The dashboard
+
+`tabtrail dashboard` writes one HTML page, `dashboard.html`, in the data folder. Open it in your browser. The page shows:
+
+- totals: topics, rising and fading topics, visits and chat messages,
+- a table of all topics with score, trend ratio, trend, hours, events, items and sources,
+- a filter box, trend and source filters, and columns that you can sort,
+- the 10 top items of a topic when you click it.
+
+The page loads nothing from the network. Run the command again after each `tabtrail run`.
 
 - **macOS:** give your terminal Full Disk Access if it cannot read the History file.
 - **First run with MLX:** tabtrail downloads the summary model from Hugging Face. It summarizes at most 200 new messages in each run. One message takes 1 to 2 seconds on an 8 GB M1.
@@ -156,10 +169,15 @@ Attention loses half its value every 7 days. Age counts from now.
 
 ```text
 score       = Σ hours of attention × 0.5^(age in days ÷ 7)
-trend ratio = short average (7-day half-life) ÷ long average (60-day half-life)
+trend ratio = hours per day now (7-day half-life) ÷ usual hours per day (60-day half-life)
 ```
 
-Example: 1 h today, 2 h 14 days ago and 4 h 60 days ago give 1 + 0.5 + 0.01 = **1.51**.
+Example: 1 h today, 2 h 14 days ago and 4 h 60 days ago.
+
+- Score: 1 + 0.5 + 0.01 = **1.51**.
+- Trend ratio, with 60 days of history: 0.150 h per day ÷ 0.109 h per day = **1.38**. The topic is rising.
+
+Each average is divided by the number of days that it covers in your history. Thus steady attention gives a trend ratio of 1, also when the history is short.
 
 | Trend ratio | Trend |
 |---|---|
@@ -194,6 +212,7 @@ For the full method, with UMAP, HDBSCAN and TF-IDF examples, read [The maths ins
 | `tabtrail match --kind search\|page\|chat --text "..." [--mlx]` | Shows which topic new text would join. Does not save the text |
 | `tabtrail profile` | Prints `profile.md` |
 | `tabtrail status` | Counts the stored rows |
+| `tabtrail dashboard` | Writes `dashboard.html` in the data folder: all topics, scores, trends and top items. The page loads nothing from the network |
 | `tabtrail last-run` | Shows the last run and tells you if a new run is necessary |
 | `tabtrail graph` | Shows each step and the steps that it needs |
 
@@ -285,6 +304,7 @@ If you set `TABTRAIL_OLLAMA` to a remote address, tabtrail sends text to that ma
 - tabtrail replaces some common key and token formats with `[secret]` before it stores text. It cannot find all secrets. For example, it does not find a plain password.
 - tabtrail only appends raw rows. If you delete browser history, the copy in tabtrail stays. To remove it, delete the data folder.
 - tabtrail copies the browser's History file, reads the copy, then deletes the copy.
+- `dashboard.html` contains your topics, page titles and URLs. It is in the data folder.
 - `.gitignore` excludes `data/`. Do not commit it.
 
 ## Limits

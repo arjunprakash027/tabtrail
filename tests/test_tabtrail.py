@@ -1,5 +1,5 @@
 """Simple checks for the filters, the brave adapter and the topic writes."""
-import sqlite3
+import json, sqlite3
 from types import SimpleNamespace
 import duckdb, numpy as np, pandas as pd, pytest
 from tabtrail import adapters, db, pipeline, query
@@ -68,6 +68,12 @@ def test_steady_attention_is_steady(tmp_path):
     emb = np.eye(4, dtype=np.float32)
     t = pipeline.topics(it, np.zeros(len(it), dtype=int), emb, con)
     assert t.trend_ratio[0] == pytest.approx(1.0, abs=0.05)
+
+def test_dashboard_text_cannot_close_the_data_block():
+    from tabtrail import dashboard
+    page = dashboard._html({"topics": [{"words": "</script><script>alert(1)</script>"}]})
+    data = page.split('type="application/json">')[1].split("</script>")[0]
+    assert "<" not in data and json.loads(data)["topics"][0]["words"].startswith("</script>")
 
 def _items(texts):
     n = len(texts)
